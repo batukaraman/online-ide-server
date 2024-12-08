@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Real-Time Code IDE</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.1.0/xterm.min.css"
+    />
+    <style>
+      body {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+      #editor {
+        height: 50%;
+      }
+      #terminal {
+        height: 50%;
+        background: #000;
+      }
+      #controls {
+        display: flex;
+        justify-content: flex-end;
+        padding: 10px;
+        background-color: #f5f5f5;
+      }
+      button {
+        margin-left: 10px;
+        padding: 5px 15px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="controls">
+      <button id="runButton">Run</button>
+      <button id="clearButton">Clear Terminal</button>
+    </div>
+    <div id="editor"></div>
+    <div id="terminal"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.42.0/min/vs/loader.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.1.0/xterm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+    <script>
+      const socket = io("http://localhost:5000/runCode");
+
+      // Monaco Editor Setup
+      require.config({
+        paths: {
+          vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.42.0/min/vs",
+        },
+      });
+      require(["vs/editor/editor.main"], function () {
+        const editor = monaco.editor.create(document.getElementById("editor"), {
+          value: "# Write your Python code here\nprint('Hello World')",
+          language: "python",
+          theme: "vs-dark",
+          automaticLayout: true,
+        });
+
+        const terminal = new Terminal();
+        terminal.open(document.getElementById("terminal"));
+
+        document.getElementById("runButton").addEventListener("click", () => {
+          const code = editor.getValue();
+          terminal.write("\u001b[32mRunning code...\u001b[0m\n");
+          socket.emit("run_code", { language: "python", code });
+        });
+
+        document.getElementById("clearButton").addEventListener("click", () => {
+          terminal.clear();
+        });
+
+        socket.on("output", (data) => {
+          terminal.write(data.output + "\n");
+        });
+
+        socket.on("input_request", () => {
+          terminal.write("\u001b[33mInput required: \u001b[0m");
+          terminal.focus();
+
+          terminal.onData((input) => {
+            terminal.write(input); // Echo input
+            socket.emit("input_response", input);
+          });
+        });
+
+        socket.on("connect", () =>
+          terminal.write("\u001b[32mConnected to server!\u001b[0m\n")
+        );
+        socket.on("disconnect", () =>
+          terminal.write("\u001b[31mDisconnected from server!\u001b[0m\n")
+        );
+      });
+    </script>
+  </body>
+</html>
